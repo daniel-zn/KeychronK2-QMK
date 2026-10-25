@@ -28,6 +28,7 @@ int rand(void) {
 #ifdef VIA_ENABLE
 #    include <string.h>
 #    include "raw_hid.h"
+#    include "via.h"
 
 // The bootloader on request over USB, so flashing needs no key press:
 // flash/flash_k2.py sends VIA's old id_bootloader_jump (0x0B), which today's
@@ -39,7 +40,16 @@ int rand(void) {
 static bool     usb_boot_requested;
 static uint16_t usb_boot_timer;
 
+void k2_rgb_changed(void);
+
 bool via_command_kb(uint8_t *data, uint8_t length) {
+    // VIA saves the lighting after each change in its Lighting menu; save it
+    // later instead, without a blink (k2_rgb_changed()).
+    if (data[0] == id_custom_save && data[1] == id_qmk_rgb_matrix_channel) {
+        k2_rgb_changed();
+        raw_hid_send(data, length);
+        return true;
+    }
     if (data[0] != K2_USB_BOOT_COMMAND || memcmp(&data[1], "BOOT", 4) != 0) {
         return false;
     }
@@ -250,8 +260,13 @@ bool dip_switch_update_kb(uint8_t index, bool active) {
     return dip_switch_update_user(index, active);
 }
 
+static bool process_rgb_key(uint16_t keycode, keyrecord_t *record);
+
 bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
     if (!process_record_user(keycode, record)) {
+        return false;
+    }
+    if (!process_rgb_key(keycode, record)) {
         return false;
     }
 
@@ -305,6 +320,155 @@ static void rgb_idle_task(void) {
         rgb_matrix_enable_noeeprom();
         rgb_idle_off = false;
     }
+}
+
+// Saving the lighting writes the flash: the MCU stalls about 24 ms per save
+// and the LEDs go dark meanwhile (drivers/led/sn32f2xx.c), a visible blink on
+// every brightness step or effect change. So the lighting keys, VIA's
+// Lighting menu and a keymap's own light keys (calling k2_rgb_changed())
+// change the lighting in RAM only, and it is saved once the LEDs are dark
+// anyway (backlight off, idle timeout, host asleep) or K2_RGB_SAVE_DELAY
+// after the last change, so it survives unplugging.
+#    ifndef K2_RGB_SAVE_DELAY
+#        define K2_RGB_SAVE_DELAY 60000
+#    endif
+
+static bool     rgb_save_pending;
+static uint32_t rgb_save_timer;
+
+void k2_rgb_changed(void) {
+    rgb_save_pending = true;
+    rgb_save_timer   = timer_read32();
+}
+
+static void rgb_save(void) {
+    rgb_config_t config = rgb_matrix_config;
+    // Off for the idle timeout only: save the backlight as on.
+    if (rgb_idle_off) {
+        config.enable = 1;
+    }
+    eeconfig_update_rgb_matrix(&config);
+    rgb_save_pending = false;
+}
+
+static void rgb_save_task(void) {
+    if (rgb_save_pending && (!rgb_matrix_is_enabled() || timer_elapsed32(rgb_save_timer) > K2_RGB_SAVE_DELAY)) {
+        rgb_save();
+    }
+}
+
+void suspend_power_down_kb(void) {
+    if (rgb_save_pending) {
+        rgb_save();
+    }
+    suspend_power_down_user();
+}
+
+// Brightness, hue, saturation and speed: one step on press, then repeated
+// while held (after K2_RGB_REPEAT_DELAY, every K2_RGB_REPEAT_INTERVAL).
+#    ifndef K2_RGB_REPEAT_DELAY
+#        define K2_RGB_REPEAT_DELAY 400
+#    endif
+#    ifndef K2_RGB_REPEAT_INTERVAL
+#        define K2_RGB_REPEAT_INTERVAL 80
+#    endif
+
+static uint16_t rgb_repeat_keycode;
+static bool     rgb_repeating;
+static uint16_t rgb_repeat_timer;
+
+// One step of an adjusting key; false if the key is not one. Shift reverses.
+static bool rgb_adjust(uint16_t keycode) {
+    bool up = !(get_mods() & MOD_MASK_SHIFT);
+    switch (keycode) {
+        case RM_HUEU:
+        case RM_HUED:
+            ((keycode == RM_HUEU) == up) ? rgb_matrix_increase_hue_noeeprom() : rgb_matrix_decrease_hue_noeeprom();
+            break;
+        case RM_SATU:
+        case RM_SATD:
+            ((keycode == RM_SATU) == up) ? rgb_matrix_increase_sat_noeeprom() : rgb_matrix_decrease_sat_noeeprom();
+            break;
+        case RM_VALU:
+        case RM_VALD:
+            ((keycode == RM_VALU) == up) ? rgb_matrix_increase_val_noeeprom() : rgb_matrix_decrease_val_noeeprom();
+            break;
+        case RM_SPDU:
+        case RM_SPDD:
+            ((keycode == RM_SPDU) == up) ? rgb_matrix_increase_speed_noeeprom() : rgb_matrix_decrease_speed_noeeprom();
+            break;
+        default:
+            return false;
+    }
+    k2_rgb_changed();
+    return true;
+}
+
+static void rgb_repeat_task(void) {
+    if (rgb_repeat_keycode && timer_elapsed(rgb_repeat_timer) > (rgb_repeating ? K2_RGB_REPEAT_INTERVAL : K2_RGB_REPEAT_DELAY)) {
+        rgb_adjust(rgb_repeat_keycode);
+        rgb_repeating    = true;
+        rgb_repeat_timer = timer_read();
+    }
+}
+
+// QMK's lighting keys, saved later. The adjusting ones act on press and
+// repeat; the others act on release as in process_rgb_matrix() (on press
+// with RGB_TRIGGER_ON_KEYDOWN).
+static bool process_rgb_key(uint16_t keycode, keyrecord_t *record) {
+    if (record->event.pressed && rgb_adjust(keycode)) {
+        rgb_repeat_keycode = keycode;
+        rgb_repeating      = false;
+        rgb_repeat_timer   = timer_read();
+        return false;
+    }
+    switch (keycode) {
+        case RM_HUEU ... RM_SPDD: // the adjusting keys, released
+            if (keycode == rgb_repeat_keycode) {
+                rgb_repeat_keycode = 0;
+            }
+            return false;
+        case RM_ON:
+        case RM_OFF:
+        case RM_TOGG:
+        case RM_NEXT:
+        case RM_PREV:
+            break;
+        default:
+            return true;
+    }
+#    ifdef RGB_TRIGGER_ON_KEYDOWN
+    bool act = record->event.pressed;
+#    else
+    bool act = !record->event.pressed;
+#    endif
+    if (!act) {
+        return false;
+    }
+    bool shifted = get_mods() & MOD_MASK_SHIFT;
+    switch (keycode) {
+        case RM_ON:
+            rgb_matrix_enable_noeeprom();
+            break;
+        case RM_OFF:
+            rgb_matrix_disable_noeeprom();
+            break;
+        case RM_TOGG:
+            rgb_matrix_toggle_noeeprom();
+            break;
+        case RM_NEXT:
+        case RM_PREV:
+            if ((keycode == RM_NEXT) != shifted) {
+                rgb_matrix_step_noeeprom();
+            } else {
+                rgb_matrix_step_reverse_noeeprom();
+            }
+            break;
+        default:
+            return true;
+    }
+    k2_rgb_changed();
+    return false;
 }
 
 static k2_sleep_blocker_t sleep_blocker;
@@ -425,6 +589,8 @@ void housekeeping_task_kb(void) {
 #    ifdef VIA_ENABLE
     usb_boot_task();
 #    endif
+    rgb_repeat_task();
+    rgb_save_task();
     rgb_idle_task();
     sleep_task();
     indicator_clear_task();

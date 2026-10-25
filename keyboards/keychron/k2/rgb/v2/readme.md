@@ -39,7 +39,7 @@ already run Keychron's own QMK: remap those in the Keychron Launcher.
 | Mac / Windows switch | Yes | Yes, also told to the Bluetooth module |
 | Battery | Charging light | Charging light (the charger drives it, unchanged), plus Fn+B shows the level on the number row and Esc blinks red when low |
 | Sleep on Bluetooth | Yes | Backlight off after 5 min, deep sleep after 10 min, any key wakes, link stays up |
-| Backlight | Keychron's effects | QMK's effects (about 40), set from VIA's Lighting tab |
+| Backlight | Keychron's effects | QMK's effects (about 40), set from VIA's Lighting tab. Changes show at once and are saved when the LEDs are dark (off, idle timeout, host asleep) or a minute after the last change: a save stalls the MCU for about 24 ms and blanks the LEDs, a blink on every step if saved at once. Unplugging within that minute loses the change |
 | Caps Lock light | Yes | Yes, also over Bluetooth |
 | Fn+Esc | — | Bootloader, for reflashing (the keyboard stops until replugged if pressed by accident). VIA images also enter it on request over USB, which `flash_k2.py` uses, so the key can be remapped in VIA with nothing lost |
 
@@ -78,6 +78,8 @@ What remains different from stock, all small:
 | First flash from stock v1.07 with the `hfd` ISP command, case closed | Pass: flashed and verified, the keyboard came back as 3434:fe02 |
 | Reflash: Fn+Esc enters the ROM bootloader (0c45:7040), `flash_k2.py` flashes it | Pass |
 | Saving settings without a flash of light: lighting changes in quick succession and Fn+Light off/on, after the LED driver goes dark during flash writes (before, a random row flashed at full brightness on each save) | Pass |
+| Hold Fn+F5 / Fn+F6 to keep dimming or brightening | Pass |
+| Lighting saved later, no blink per step: brightness steps and effect changes | Pass by eye; over USB (`flash/save_test.py`) a VIA save takes 2 ms instead of 24, a restart right after a change loses it, 65 s after keeps it, turning off saves at once. Saving when the host sleeps or the Bluetooth idle timeout turns the backlight off: not tried |
 | Reflash with no key press: `flash_k2.py` asks over USB, the firmware enters the ROM bootloader, flashes, comes back | Pass (twice, with a userspace keymap built on this firmware's `v2.c`); a firmware without the request answers "unhandled" and the script falls back to Fn+Esc, also checked on the keyboard |
 | Typing, wired | Pass (most keys checked by hand, on another computer) |
 | RGB effects, no flicker | Pass |
@@ -170,6 +172,7 @@ again (it flashes the ROM bootloader directly).
 | Fn+B | Battery level on the number row for 3 s (green 10 keys, yellow 6, red 3) |
 | Fn+Esc | Bootloader (Mac and Windows layers) |
 | Light (top right) | Next lighting effect; Fn+Light turns the lights on or off |
+| Fn+F5 / Fn+F6 | Backlight dimmer / brighter; hold to keep going (also Fn+arrows for hue and saturation) |
 
 Moving the side switch restarts the keyboard. To pair: switch to BT, hold
 Fn+1 until the 1 key blinks blue, connect to "Keychron K2" from the host.
@@ -264,6 +267,6 @@ It also reads and sets single keys (`get`, `set`), the lighting (`rgb`,
 | `config.h`, `rules.mk`, `info.json`, `halconf.h`, `mcuconf.h` | Board settings: Bluetooth module, SPI0, keycodes |
 | `ansi/`, `iso/` | Layouts and keymaps (`default`, `default_via`) |
 | `via_json/` | VIA definitions |
-| `flash/` | `flash_k2.py`, `fetch_stock.sh`, `test_flash_k2.py`, `via_test.py` |
+| `flash/` | `flash_k2.py`, `fetch_stock.sh`, `test_flash_k2.py`, `via_test.py`, `save_test.py` |
 | `release/build_all.sh` | Builds and checks the release images |
 | `sim/renode/` | Emulator tests |
