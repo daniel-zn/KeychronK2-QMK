@@ -6,8 +6,11 @@ support moved to the K2 (same MCU, same ITON module on the same pins), VIA
 keymaps with every key remappable, and fixes to SonixQMK's K2 keymaps. Guide:
 [keyboards/keychron/k2/rgb/v2/readme.md](keyboards/keychron/k2/rgb/v2/readme.md).
 
-Besides this section, only `keyboards/keychron/k2/rgb/v2/` differs from the K8 repository; in a
-clone, `git diff --stat 705ea31b55 HEAD`.
+Besides this section, `keyboards/keychron/k2/rgb/v2/` differs from the K8 repository, plus one
+change to the shared LED driver `drivers/led/sn32f2xx.c` (all SN32 keyboards, the K8 too): while
+the flash is written to save settings, the LEDs go dark instead of one row staying lit at full
+brightness, which showed as a short flash of light on every save. In a clone,
+`git diff --stat 705ea31b55 HEAD`.
 
 The K8 repository's README follows.
 

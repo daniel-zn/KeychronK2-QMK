@@ -620,8 +620,15 @@ static void rgb_callback(PWMDriver *pwmp) {
         }
     }
 #endif
-    // Scan the rgb and key matrix
-    if (EFLD1.state != FLASH_PGM) update_pwm_channels(pwmp);
+    // Scan the rgb and key matrix. Not while the flash is written or erased
+    // (saving settings): the MCU stalls during each write, and a row left lit
+    // stays on at full brightness meanwhile, a visible flash of light. So the
+    // LEDs go dark until the write is done.
+    if (EFLD1.state == FLASH_PGM || EFLD1.state == FLASH_ERASE) {
+        shared_matrix_rgb_disable_output();
+    } else {
+        update_pwm_channels(pwmp);
+    }
     chSysLockFromISR();
 #if !((SN32F2XX_PWM_CONTROL == HARDWARE_PWM) && (SN32F2XX_PWM_DIRECTION == COL2ROW) && defined(SN32F2XX_PWM_RESTART))
     // Advance the timer to just before the wrap-around, that will start a new PWM cycle

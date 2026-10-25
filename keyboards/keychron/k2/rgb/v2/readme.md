@@ -77,6 +77,7 @@ What remains different from stock, all small:
 | Board check: USB "Keychron" / "Keychron K2", 05ac:024f, bcdDevice 0x0107, RGB backlight | Pass |
 | First flash from stock v1.07 with the `hfd` ISP command, case closed | Pass: flashed and verified, the keyboard came back as 3434:fe02 |
 | Reflash: Fn+Esc enters the ROM bootloader (0c45:7040), `flash_k2.py` flashes it | Pass |
+| Saving settings without a flash of light: lighting changes in quick succession and Fn+Light off/on, after the LED driver goes dark during flash writes (before, a random row flashed at full brightness on each save) | Pass |
 | Reflash with no key press: `flash_k2.py` asks over USB, the firmware enters the ROM bootloader, flashes, comes back | Pass (twice, with a userspace keymap built on this firmware's `v2.c`); a firmware without the request answers "unhandled" and the script falls back to Fn+Esc, also checked on the keyboard |
 | Typing, wired | Pass (most keys checked by hand, on another computer) |
 | RGB effects, no flicker | Pass |
@@ -257,6 +258,7 @@ It also reads and sets single keys (`get`, `set`), the lighting (`rgb`,
 
 | Path | Contents |
 |---|---|
+| `drivers/led/sn32f2xx.c` (from the repository root, shared by all SN32 keyboards) | LED driver: dark while the flash is written |
 | `v2.c` | Bluetooth control: profiles, pairing, battery, indicators, backlight timeout; the bootloader on request over USB (VIA images: raw HID command `0x0B` followed by `BOOT`) |
 | `sleep.c` | Deep sleep on Bluetooth |
 | `config.h`, `rules.mk`, `info.json`, `halconf.h`, `mcuconf.h` | Board settings: Bluetooth module, SPI0, keycodes |
