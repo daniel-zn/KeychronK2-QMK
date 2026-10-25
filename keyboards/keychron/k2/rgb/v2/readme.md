@@ -68,17 +68,45 @@ What remains different from stock, all small:
 | Fits | VIA images use flash up to 0xE584 of 0xF7C0 (settings area above), 208–224 bytes RAM free (the hardware-tested K8 VIA image has 224) |
 | Emulator tests | 61 checks pass, 0 fail, 1 known issue (the Caps Lock one above), see [Tests](#8-tests) |
 | Flash script checks | Refuses K8 images, K2 v1 images, junk, layout mismatches, a stock keyboard that is not a K2 v2 (20 checks in `flash/test_flash_k2.py`) |
-| Reproducible | A clean rebuild gives byte-identical images |
+| Reproducible | A clean rebuild with the same compiler gives byte-identical images. The VIA images depend on the build date (VIA's settings check uses it), so a rebuild on another day differs. Arm's macOS build of GCC 13.2.1 (Homebrew `osx-cross/arm/arm-gcc-bin@13`) makes images about 450 bytes smaller than the Linux one, with the same free RAM |
 
-**Not yet done: running it on a real K2.** It cannot brick the keyboard: the
-SN32F248B's bootloader is in ROM, so shorting the two BOOT pads left of the
-spacebar switch while plugging in always gets back to a flashable state, and
-stock firmware can be put back.
+**On a real K2** (ANSI, stock firmware v1.07, Mac mini and MacBook, 2026-10-25):
+
+| Check | Result |
+|---|---|
+| Board check: USB "Keychron" / "Keychron K2", 05ac:024f, bcdDevice 0x0107, RGB backlight | Pass |
+| First flash from stock v1.07 with the `hfd` ISP command, case closed | Pass: flashed and verified, the keyboard came back as 3434:fe02 |
+| Reflash: Fn+Esc enters the ROM bootloader (0c45:7040), `flash_k2.py` flashes it | Pass |
+| Typing, wired | Pass (most keys checked by hand, on another computer) |
+| RGB effects, no flicker | Pass |
+| Fn row, Fn+arrows, Caps Lock light, wired | Mostly checked, nothing failed |
+| VIA over raw HID: protocol 0x000D, 4 layers, 16 macros, RGB values, all 384 keys match the image | Pass (by script, not in usevia.app) |
+| VIA remap: Right Ctrl set to A types "a" and survives unplugging | Pass |
+| Bluetooth: hosts paired under stock still connect and type | Pass |
+| Bluetooth: new pairing with a MacBook, typing | Pass |
+| VIA in usevia.app (Design tab, Custom keys, Lighting menu) | Not tried |
+| Fn+B battery level, Fn+1/2/3 profile switching, Cable → BT → Cable | Not tried |
+| Backlight off after 5 min, deep sleep after 10 min, wake keystroke | Not tried |
+| Caps Lock light over Bluetooth | Not tried |
+| Back to stock | Not tried (and only v1.04 exists to go back to; see [Back to stock](#7-back-to-stock)) |
+
+It cannot brick the keyboard: the SN32F248B's bootloader is in ROM, so
+shorting the two BOOT pads left of the spacebar switch while plugging in
+always gets back to a flashable state, and stock firmware can be put back.
 
 ## 4. Build
 
-macOS: `brew install qmk/qmk/qmk libusb pkgconf` (QMK's formula brings the ARM
-compiler). Debian/Ubuntu: `apt install gcc-arm-none-eabi libnewlib-arm-none-eabi`
+macOS (tested on Apple silicon, 2026-10): the ARM compiler from the
+osx-cross tap, the `qmk` CLI from PyPI, and libusb for the flasher:
+
+    brew tap osx-cross/arm && brew trust osx-cross/arm     # newer Homebrew asks to trust a tap
+    brew install osx-cross/arm/arm-gcc-bin@13 libusb pkgconf
+    uv tool install --python 3.12 qmk                      # or: pipx install qmk
+    export PATH="$(brew --prefix)/opt/arm-gcc-bin@13/bin:$PATH"   # keg-only
+
+(QMK's own `brew install qmk/qmk/qmk` stops at untrusted taps, `qmk/qmk`,
+`osx-cross/arm` and then `osx-cross/avr`, and brings the AVR toolchain this
+keyboard does not need.) Debian/Ubuntu: `apt install gcc-arm-none-eabi libnewlib-arm-none-eabi`
 and `pip install qmk`. Then, from the repository root:
 
     git submodule update --init --depth 1 lib/chibios lib/chibios-contrib lib/printf
@@ -111,6 +139,14 @@ and a stock keyboard whose USB strings are not a K2 v2's ("Keychron" /
 "Keychron K2"; a K2 version 1 or a K8 says something else). It asks before
 writing and waits for the keyboard to come back.
 
+Every flash writes the whole 64 KiB, settings area included, so it resets
+what VIA saved (remapped keys, macros, lighting) and the Bluetooth profile
+number; pairings live in the Bluetooth module and stay. Save the layout from
+VIA's Save + Load tab before reflashing, and load it again afterwards.
+
+The stock firmware on the tested board was v1.07, newer than the v1.04 the
+ISP command was found in; it took the command all the same.
+
 If anything goes wrong mid-flash: unplug, short the two BOOT pads left of the
 spacebar switch with tweezers while plugging back in, and run the command
 again (it flashes the ROM bootloader directly).
@@ -126,6 +162,7 @@ again (it flashes the ROM bootloader directly).
 | Hold Fn+1 / 2 / 3 for 3 s | Put that profile into pairing mode |
 | Fn+B | Battery level on the number row for 3 s (green 10 keys, yellow 6, red 3) |
 | Fn+Esc | Bootloader (Mac and Windows layers) |
+| Light (top right) | Next lighting effect; Fn+Light turns the lights on or off |
 
 Moving the side switch restarts the keyboard. To pair: switch to BT, hold
 Fn+1 until the 1 key blinks blue, connect to "Keychron K2" from the host.
@@ -138,13 +175,40 @@ work.
 then remap in Configure. The Bluetooth keys are under Custom: Batt, BT1, BT2,
 BT3.
 
+### Your own keymap, kept outside this repository
+
+VIA changes keys without rebuilding, but every flash resets them (see
+[Flash](#5-flash)). A layout that should survive reflashing, or one that
+changes more than keys (which lighting effects are built in, new keys), can
+live in a [QMK userspace](https://docs.qmk.fm/newbs_external_userspace): a
+folder of your own with this layout,
+
+    qmk.json                                  {"userspace_version": "1.0", "build_targets": []}
+    keyboards/keychron/k2/rgb/v2/ansi/keymaps/<name>/keymap.c
+    keyboards/keychron/k2/rgb/v2/ansi/keymaps/<name>/rules.mk     VIA_ENABLE = yes
+    keyboards/keychron/k2/rgb/v2/ansi/keymaps/<name>/config.h     the two lines of default_via/config.h, plus your own
+
+Start `keymap.c` from `ansi/keymaps/default/keymap.c`. Build it from this
+repository (plain `make` does not look in a userspace) with
+
+    QMK_HOME=$PWD QMK_USERSPACE=/path/to/your/folder qmk compile -kb keychron/k2/rgb/v2/ansi -km <name>
+
+and flash the `.bin` with `flash_k2.py` as above. Turning effects off in
+`config.h` (`#undef ENABLE_RGB_MATRIX_<EFFECT>`) renumbers the rest, so VIA's
+own Lighting menu then names the wrong ones: give VIA a copy of
+`via_json/k2_ansi.json` whose `menus` lists your effects by number (0 is off,
+1 solid colour, then the enabled ones in the order of
+`quantum/rgb_matrix/animations/rgb_matrix_effects.inc`).
+
 ## 7. Back to stock
 
     keyboards/keychron/k2/rgb/v2/flash/fetch_stock.sh
     keyboards/keychron/k2/rgb/v2/flash/flash_k2.py keyboards/keychron/k2/rgb/v2/flash/stock/Keychron_K2_RGB_Rev2_ANSI_v1.04_240B.bin
 
 Keychron's program from the SonixQMK database, not a copy of what was on the
-keyboard; ISO: `..._ISO_v1.05_240B.bin`.
+keyboard; ISO: `..._ISO_v1.05_240B.bin`. A keyboard that shipped with a newer
+version (the tested one had v1.07, bcdDevice 0x0107) goes back to v1.04: the
+flasher cannot read the old firmware out, and no newer image is published.
 
 ## 8. Tests
 
@@ -173,6 +237,16 @@ The flash script's checks, against real stock images from the
     python3 keyboards/keychron/k2/rgb/v2/flash/test_flash_k2.py \
         keyboards/keychron/k2/rgb/v2/flash/flash_k2.py dist <stock image dir>
 
+On the keyboard, after flashing a VIA image, `flash/via_test.py` talks VIA's
+raw HID protocol (no browser) and checks that the keymap the keyboard holds is
+the image's default (Python with `hidapi`, the ARM binutils on the PATH):
+
+    uv run --with hidapi python keyboards/keychron/k2/rgb/v2/flash/via_test.py \
+        check .build/keychron_k2_rgb_v2_ansi_default_via.elf
+
+It also reads and sets single keys (`get`, `set`), the lighting (`rgb`,
+`rgbset`), dumps the layers (`dump`) and loads the image's defaults (`reset`).
+
 ## 9. Files
 
 | Path | Contents |
@@ -182,6 +256,6 @@ The flash script's checks, against real stock images from the
 | `config.h`, `rules.mk`, `info.json`, `halconf.h`, `mcuconf.h` | Board settings: Bluetooth module, SPI0, keycodes |
 | `ansi/`, `iso/` | Layouts and keymaps (`default`, `default_via`) |
 | `via_json/` | VIA definitions |
-| `flash/` | `flash_k2.py`, `fetch_stock.sh`, `test_flash_k2.py` |
+| `flash/` | `flash_k2.py`, `fetch_stock.sh`, `test_flash_k2.py`, `via_test.py` |
 | `release/build_all.sh` | Builds and checks the release images |
 | `sim/renode/` | Emulator tests |
