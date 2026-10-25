@@ -41,7 +41,7 @@ already run Keychron's own QMK: remap those in the Keychron Launcher.
 | Sleep on Bluetooth | Yes | Backlight off after 5 min, deep sleep after 10 min, any key wakes, link stays up |
 | Backlight | Keychron's effects | QMK's effects (about 40), set from VIA's Lighting tab |
 | Caps Lock light | Yes | Yes, also over Bluetooth |
-| Fn+Esc | — | Bootloader, for reflashing (the keyboard stops until replugged if pressed by accident; remap it in VIA if that is a worry) |
+| Fn+Esc | — | Bootloader, for reflashing (the keyboard stops until replugged if pressed by accident). VIA images also enter it on request over USB, which `flash_k2.py` uses, so the key can be remapped in VIA with nothing lost |
 
 SonixQMK alone loses Bluetooth on the K2 (it has no Bluetooth driver set up
 for the K2), its Mac Fn+Esc does nothing (`Q_RESET` is a ChibiOS constant, not
@@ -65,9 +65,9 @@ What remains different from stock, all small:
 |---|---|
 | Bluetooth wiring checked | Stock K2 and K8 firmwares (SonixQMK database) disassembled: SPI0 interrupt handler instruction-for-instruction identical, same A0 request / A1 direction lines, same `0xA6` control commands, same side-switch decoding, same flash-mode command. The K8 port is tested on real hardware with a Mac |
 | Builds | ANSI and ISO, `default` and `default_via`; no warnings; `qmk lint` passes |
-| Fits | VIA images use flash up to 0xE584 of 0xF7C0 (settings area above), 208–224 bytes RAM free (the hardware-tested K8 VIA image has 224) |
+| Fits | VIA images use flash up to 0xE424 of 0xF7C0 (settings area above; Arm's macOS GCC 13.2.1 build, the Linux one adds about 450 bytes), 208–224 bytes RAM free (the hardware-tested K8 VIA image has 224) |
 | Emulator tests | 61 checks pass, 0 fail, 1 known issue (the Caps Lock one above), see [Tests](#8-tests) |
-| Flash script checks | Refuses K8 images, K2 v1 images, junk, layout mismatches, a stock keyboard that is not a K2 v2 (20 checks in `flash/test_flash_k2.py`) |
+| Flash script checks | Refuses K8 images, K2 v1 images, junk, layout mismatches, a stock keyboard that is not a K2 v2; asks for the bootloader over USB and falls back to Fn+Esc (24 checks in `flash/test_flash_k2.py`) |
 | Reproducible | A clean rebuild with the same compiler gives byte-identical images. The VIA images depend on the build date (VIA's settings check uses it), so a rebuild on another day differs. Arm's macOS build of GCC 13.2.1 (Homebrew `osx-cross/arm/arm-gcc-bin@13`) makes images about 450 bytes smaller than the Linux one, with the same free RAM |
 
 **On a real K2** (ANSI, stock firmware v1.07, Mac mini and MacBook, 2026-10-25):
@@ -77,6 +77,7 @@ What remains different from stock, all small:
 | Board check: USB "Keychron" / "Keychron K2", 05ac:024f, bcdDevice 0x0107, RGB backlight | Pass |
 | First flash from stock v1.07 with the `hfd` ISP command, case closed | Pass: flashed and verified, the keyboard came back as 3434:fe02 |
 | Reflash: Fn+Esc enters the ROM bootloader (0c45:7040), `flash_k2.py` flashes it | Pass |
+| Reflash with no key press: `flash_k2.py` asks over USB, the firmware enters the ROM bootloader, flashes, comes back | Pass (twice, with a userspace keymap built on this firmware's `v2.c`); a firmware without the request answers "unhandled" and the script falls back to Fn+Esc, also checked on the keyboard |
 | Typing, wired | Pass (most keys checked by hand, on another computer) |
 | RGB effects, no flicker | Pass |
 | Fn row, Fn+arrows, Caps Lock light, wired | Mostly checked, nothing failed |
@@ -126,12 +127,17 @@ Once, build the flasher (SonixFlasherC 3.0.0 with the K8 port's macOS patch):
 
 Then, side switch on **Cable**, cable plugged in (US layout, with VIA):
 
-    keyboards/keychron/k2/rgb/v2/flash/flash_k2.py dist/keychron_k2_rgb_v2_ansi_default_via.bin
+    uv run --with hidapi python keyboards/keychron/k2/rgb/v2/flash/flash_k2.py dist/keychron_k2_rgb_v2_ansi_default_via.bin
+
+(`hidapi` lets the script ask a keyboard on this firmware for the bootloader
+over USB; `pip install hidapi` and plain `flash_k2.py ...` work as well, and
+without it the script asks for Fn+Esc.)
 
 | The keyboard runs | What happens |
 |---|---|
 | Stock firmware (first time) | The script sends the ISP command stock firmware accepts, so there is no need to open the case |
-| This firmware (later) | Press **Fn+Esc** when the script asks, to enter the bootloader |
+| This firmware, a VIA image (later) | The script asks the firmware over USB to enter the bootloader: no key press |
+| This firmware, a non-VIA image, or a VIA image built before the USB request was added | Press **Fn+Esc** when the script asks |
 | The ROM bootloader | Flashed directly |
 
 The script refuses an image that is not for a K2 v2 RGB, a layout mismatch,
@@ -251,7 +257,7 @@ It also reads and sets single keys (`get`, `set`), the lighting (`rgb`,
 
 | Path | Contents |
 |---|---|
-| `v2.c` | Bluetooth control: profiles, pairing, battery, indicators, backlight timeout |
+| `v2.c` | Bluetooth control: profiles, pairing, battery, indicators, backlight timeout; the bootloader on request over USB (VIA images: raw HID command `0x0B` followed by `BOOT`) |
 | `sleep.c` | Deep sleep on Bluetooth |
 | `config.h`, `rules.mk`, `info.json`, `halconf.h`, `mcuconf.h` | Board settings: Bluetooth module, SPI0, keycodes |
 | `ansi/`, `iso/` | Layouts and keymaps (`default`, `default_via`) |

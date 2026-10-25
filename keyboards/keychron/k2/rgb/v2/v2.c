@@ -25,6 +25,37 @@ int rand(void) {
     return (int)(k2_rand_state & RAND_MAX);
 }
 
+#ifdef VIA_ENABLE
+#    include <string.h>
+#    include "raw_hid.h"
+
+// The bootloader on request over USB, so flashing needs no key press:
+// flash/flash_k2.py sends VIA's old id_bootloader_jump (0x0B), which today's
+// VIA no longer handles, followed by "BOOT" so nothing else triggers it. The
+// reply goes out first and the jump follows a moment later.
+#    define K2_USB_BOOT_COMMAND 0x0B
+#    define K2_USB_BOOT_DELAY 50
+
+static bool     usb_boot_requested;
+static uint16_t usb_boot_timer;
+
+bool via_command_kb(uint8_t *data, uint8_t length) {
+    if (data[0] != K2_USB_BOOT_COMMAND || memcmp(&data[1], "BOOT", 4) != 0) {
+        return false;
+    }
+    raw_hid_send(data, length);
+    usb_boot_requested = true;
+    usb_boot_timer     = timer_read();
+    return true;
+}
+
+static void usb_boot_task(void) {
+    if (usb_boot_requested && timer_elapsed(usb_boot_timer) > K2_USB_BOOT_DELAY) {
+        reset_keyboard();
+    }
+}
+#endif
+
 #ifdef BLUETOOTH_ENABLE
 #    include "connection.h"
 #    include "iton_bt.h"
@@ -391,6 +422,9 @@ void housekeeping_task_kb(void) {
         iton_bt_enter_pairing();
     }
 
+#    ifdef VIA_ENABLE
+    usb_boot_task();
+#    endif
     rgb_idle_task();
     sleep_task();
     indicator_clear_task();

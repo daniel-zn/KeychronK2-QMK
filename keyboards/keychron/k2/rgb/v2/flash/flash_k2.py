@@ -11,7 +11,9 @@ descriptor. It then finds the keyboard (stock firmware, this QMK, or the ROM
 bootloader). The K2 and the K8 share the stock USB IDs, and the first K2 RGB
 (version 1) has different firmware, so on stock firmware it also checks the
 USB strings: a K2 v2 says "Keychron" / "Keychron K2". It refuses a layout or
-model mismatch, then asks for confirmation.
+model mismatch, then asks for confirmation. A keyboard on this firmware is
+asked over USB to enter the bootloader (needs hidapi: pip install hidapi, or
+run with uv run --with hidapi); without it, or on older firmware, press Fn+Esc.
 """
 import argparse
 import pathlib
@@ -41,6 +43,8 @@ LAYOUTS = {
 # JIS). The K2 v1 says "Keytron" or "USB DEVICE"; the K8 says "Keychron K8".
 STOCK_K2V2_STRINGS = ("Keychron", "Keychron K2")
 K2_NAME = "Keychron K2".encode("utf-16le")
+# This firmware's VIA command for the bootloader (v2.c, via_command_kb).
+USB_BOOT_COMMAND = b"\x0bBOOT"
 
 
 def fail(msg):
@@ -136,6 +140,33 @@ def wait_for(target, seconds):
     return False
 
 
+def request_bootloader(ids):
+    """Asks this firmware over VIA's raw HID to enter the bootloader.
+
+    True if it agreed. False without hidapi (pip install hidapi), without a VIA
+    interface (a non-VIA image), or from firmware that predates the command
+    (it answers 0xFF): then Fn+Esc does it.
+    """
+    try:
+        import hid
+    except ImportError:
+        return False
+    for d in hid.enumerate(*ids):
+        if d.get("usage_page") != 0xFF60 or d.get("usage") != 0x61:
+            continue
+        h = hid.device()
+        try:
+            h.open_path(d["path"])
+            h.write(b"\x00" + USB_BOOT_COMMAND + bytes(32 - len(USB_BOOT_COMMAND)))
+            reply = bytes(h.read(32, 1000))
+        except (OSError, ValueError):
+            return False
+        finally:
+            h.close()
+        return reply.startswith(USB_BOOT_COMMAND)
+    return False
+
+
 def describe(ids):
     if ids == BOOTLOADER:
         return "ROM bootloader (0c45:7040)"
@@ -176,8 +207,20 @@ def main():
         if image_layout != keyboard_layout and not args.force:
             fail(f"image is for {image_layout} but the keyboard is {keyboard_layout} (use --force to override)")
 
+    print("\nKeep the side switch on Cable and the cable plugged in until flashing finishes.")
+    if not args.yes:
+        try:
+            answer = input("Flash now? [y/N] ")
+        except EOFError:
+            answer = ""
+        if answer.strip().lower() != "y":
+            sys.exit("aborted")
+
     if keyboard in LAYOUTS and LAYOUTS[keyboard][0] == "QMK":
-        print("Press Fn+Esc on the K2 to enter the bootloader (waiting 30 s)...")
+        if request_bootloader(keyboard):
+            print("asked the firmware for the bootloader over USB")
+        else:
+            print("Press Fn+Esc on the K2 to enter the bootloader (waiting 30 s)...")
         if not wait_for(BOOTLOADER, 30):
             fail("the ROM bootloader did not appear")
         keyboard = BOOTLOADER
@@ -188,15 +231,6 @@ def main():
     else:
         # Stock firmware switches to ISP mode on this command and keeps its USB ID.
         target = ["-v", f"{keyboard[0]:04x}/{keyboard[1]:04x}", "-r", "hfd"]
-
-    print("\nKeep the side switch on Cable and the cable plugged in until flashing finishes.")
-    if not args.yes:
-        try:
-            answer = input("Flash now? [y/N] ")
-        except EOFError:
-            answer = ""
-        if answer.strip().lower() != "y":
-            sys.exit("aborted")
 
     cmd = [str(args.flasher), *target, "-f", str(args.image)]
     print("$", " ".join(cmd))

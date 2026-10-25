@@ -1,4 +1,5 @@
-"""Checks flash_k2.py's image and keyboard checks against real images.
+"""Checks flash_k2.py's image and keyboard checks against real images, and its
+USB bootloader request against a stand-in for hidapi.
 
     python3 test_flash_k2.py <flash_k2.py> <dir with the four K2 QMK images and the K8 QMK image> <stock image dir>
 
@@ -43,4 +44,26 @@ try:
     fk.find_keyboard({S: (None, None), fk.BOOTLOADER: (None, None)}); expect("two keyboards refused", False)
 except SystemExit:
     expect("two keyboards refused", True)
+# request_bootloader, against a stand-in for hidapi
+import types
+class FakeDevice:
+    def __init__(self, reply): self.reply, self.sent = reply, None
+    def open_path(self, path): pass
+    def write(self, data): self.sent = bytes(data)
+    def read(self, n, timeout): return list(self.reply(self.sent[1:]))
+    def close(self): pass
+def fake_hid(reply, usage_page=0xFF60):
+    m = types.ModuleType("hid"); dev = FakeDevice(reply)
+    m.enumerate = lambda vid, pid: [{"usage_page": usage_page, "usage": 0x61, "path": b"p"}]
+    m.device = lambda: dev
+    return m, dev
+Q = (0x3434, 0xFE02)
+sys.modules["hid"], dev = fake_hid(lambda sent: sent[:32])
+expect("USB bootloader request sends 0x0B BOOT and accepts the echo", fk.request_bootloader(Q) and dev.sent[1:6] == b"\x0bBOOT" and len(dev.sent) == 33)
+sys.modules["hid"], dev = fake_hid(lambda sent: b"\xff" + sent[1:32])
+expect("older firmware (0xFF unhandled) falls back to Fn+Esc", not fk.request_bootloader(Q))
+sys.modules["hid"], dev = fake_hid(lambda sent: sent[:32], usage_page=0x0001)
+expect("no VIA interface falls back to Fn+Esc", not fk.request_bootloader(Q))
+sys.modules["hid"] = None
+expect("no hidapi falls back to Fn+Esc", not fk.request_bootloader(Q))
 print(f"RESULT pass={ok} fail={bad}"); sys.exit(1 if bad else 0)
