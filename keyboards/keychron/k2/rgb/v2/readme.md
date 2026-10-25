@@ -41,6 +41,7 @@ already run Keychron's own QMK: remap those in the Keychron Launcher.
 | Sleep on Bluetooth | Yes | Backlight off after 5 min, deep sleep after 10 min, any key wakes, link stays up |
 | Backlight | Keychron's effects | QMK's effects (about 40), set from VIA's Lighting tab. Changes show at once and are saved when the LEDs are dark (off, idle timeout, host asleep) or a minute after the last change: a save stalls the MCU for about 24 ms and blanks the LEDs, a blink on every step if saved at once. Unplugging within that minute loses the change |
 | Caps Lock light | Yes | Yes, also over Bluetooth |
+| Caps Lock on a Mac | Every tap | Every tap: macOS ignores Caps Lock presses shorter than about 80 ms, so the firmware holds a quick tap for 100 ms (`K2_CAPS_MIN_HOLD`) |
 | Fn+Esc | — | Bootloader, for reflashing (the keyboard stops until replugged if pressed by accident). VIA images also enter it on request over USB, which `flash_k2.py` uses, so the key can be remapped in VIA with nothing lost |
 
 SonixQMK alone loses Bluetooth on the K2 (it has no Bluetooth driver set up
@@ -79,6 +80,7 @@ What remains different from stock, all small:
 | Reflash: Fn+Esc enters the ROM bootloader (0c45:7040), `flash_k2.py` flashes it | Pass |
 | Saving settings without a flash of light: lighting changes in quick succession and Fn+Light off/on, after the LED driver goes dark during flash writes (before, a random row flashed at full brightness on each save) | Pass |
 | Hold Fn+F5 / Fn+F6 to keep dimming or brightening | Pass |
+| Caps Lock tapped quickly and repeatedly on a Mac registers every time (before: some quick taps did nothing) | Pass |
 | Lighting saved later, no blink per step: brightness steps and effect changes | Pass by eye; over USB (`flash/save_test.py`) a VIA save takes 2 ms instead of 24, a restart right after a change loses it, 65 s after keeps it, turning off saves at once. Saving when the host sleeps or the Bluetooth idle timeout turns the backlight off: not tried |
 | Reflash with no key press: `flash_k2.py` asks over USB, the firmware enters the ROM bootloader, flashes, comes back | Pass (twice, with a userspace keymap built on this firmware's `v2.c`); a firmware without the request answers "unhandled" and the script falls back to Fn+Esc, also checked on the keyboard |
 | Typing, wired | Pass (most keys checked by hand, on another computer) |

@@ -262,11 +262,52 @@ bool dip_switch_update_kb(uint8_t index, bool active) {
 
 static bool process_rgb_key(uint16_t keycode, keyrecord_t *record);
 
+// macOS ignores a Caps Lock press shorter than about 80 ms (its Caps Lock
+// delay; QMK's TAP_HOLD_CAPS_DELAY is for the same reason), so a quick tap
+// sometimes did nothing. The release of a short tap is held back until the
+// key has been down K2_CAPS_MIN_HOLD; holding it longer is unchanged.
+#    ifndef K2_CAPS_MIN_HOLD
+#        define K2_CAPS_MIN_HOLD 100
+#    endif
+
+static bool     caps_release_pending;
+static uint16_t caps_press_timer;
+
+static bool process_caps(uint16_t keycode, keyrecord_t *record) {
+    if (keycode != KC_CAPS) {
+        return true;
+    }
+    if (record->event.pressed) {
+        if (caps_release_pending) {
+            caps_release_pending = false;
+            unregister_code(KC_CAPS);
+        }
+        caps_press_timer = timer_read();
+        return true;
+    }
+    if (timer_elapsed(caps_press_timer) < K2_CAPS_MIN_HOLD) {
+        caps_release_pending = true;
+        return false;
+    }
+    return true;
+}
+
+static void caps_release_task(void) {
+    if (caps_release_pending && timer_elapsed(caps_press_timer) >= K2_CAPS_MIN_HOLD) {
+        caps_release_pending = false;
+        unregister_code(KC_CAPS);
+    }
+}
+
+
 bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
     if (!process_record_user(keycode, record)) {
         return false;
     }
     if (!process_rgb_key(keycode, record)) {
+        return false;
+    }
+    if (!process_caps(keycode, record)) {
         return false;
     }
 
@@ -590,6 +631,7 @@ void housekeeping_task_kb(void) {
     usb_boot_task();
 #    endif
     rgb_repeat_task();
+    caps_release_task();
     rgb_save_task();
     rgb_idle_task();
     sleep_task();
