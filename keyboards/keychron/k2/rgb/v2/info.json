@@ -1,0 +1,11 @@
+{
+    "keycodes": [
+        {"key": "K2_BATT"},
+        {"key": "K2_BT1"},
+        {"key": "K2_BT2"},
+        {"key": "K2_BT3"}
+    ],
+    "rgb_matrix": {
+        "sleep": true
+    }
+}

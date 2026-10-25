@@ -1,0 +1,7 @@
+# The K2 regression tests: run with ./run.sh <firmware.elf>. The SN32F248B and
+# Bluetooth module models are the K8 port's.
+include $ORIGIN/../../../../../k8/sim/renode/sn32.cs
+include $ORIGIN/../../../../../k8/sim/renode/iton.cs
+logLevel 3
+python "from System import Environment; execfile(Environment.GetEnvironmentVariable('K2_SIM_DIR') + '/tests.py')"
+quit

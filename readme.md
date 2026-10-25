@@ -1,3 +1,18 @@
+# QMK for the Keychron K2 v2 RGB and K8, with Bluetooth
+
+This fork of [goyamamoto/KeychronK8-QMK](https://github.com/goyamamoto/KeychronK8-QMK)
+adds the **Keychron K2 version 2 with RGB backlight**: the K8's Bluetooth
+support moved to the K2 (same MCU, same ITON module on the same pins), VIA
+keymaps with every key remappable, and fixes to SonixQMK's K2 keymaps. Guide:
+[keyboards/keychron/k2/rgb/v2/readme.md](keyboards/keychron/k2/rgb/v2/readme.md).
+
+Besides this section, only `keyboards/keychron/k2/rgb/v2/` differs from the K8 repository; in a
+clone, `git diff --stat 705ea31b55 HEAD`.
+
+The K8 repository's README follows.
+
+---
+
 # QMK for the Keychron K8, with Bluetooth
 
 QMK firmware for the original Keychron K8 with RGB backlight, built on

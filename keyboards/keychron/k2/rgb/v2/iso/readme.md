@@ -13,9 +13,9 @@ Compile example for this keyboard (after setting up your build environment):
 
 Compile example for this keyboard with VIA (after setting up your build environment):
 
-    qmk compile -kb keychron/k2/rgb/v2/iso -km via
+    qmk compile -kb keychron/k2/rgb/v2/iso -km default_via
 
-This keyboard must be flashed with an external [GUI](https://github.com/SonixQMK/sonix-flasher) or [CLI](https://github.com/SonixQMK/SonixFlasherC)
+Wired and Bluetooth (the ITON module, as on the K8). Flashing with `flash/flash_k2.py` (also from stock firmware), the Bluetooth keys and going back to stock are in the [K2 v2 RGB guide](../readme.md).
 
 
 

@@ -4,6 +4,12 @@
   "productId": "0xFE03",
   "matrix": {"rows": 6, "cols": 16},
   "keycodes": ["qmk_lighting"],
+  "customKeycodes": [
+    {"name": "Battery", "title": "Show the battery level on the number row (Bluetooth)", "shortName": "Batt"},
+    {"name": "Bluetooth 1", "title": "Bluetooth profile 1; hold 3 s to pair (Bluetooth)", "shortName": "BT1"},
+    {"name": "Bluetooth 2", "title": "Bluetooth profile 2; hold 3 s to pair (Bluetooth)", "shortName": "BT2"},
+    {"name": "Bluetooth 3", "title": "Bluetooth profile 3; hold 3 s to pair (Bluetooth)", "shortName": "BT3"}
+  ],
   "layouts": {
         "keymap": [
             ["0,0","0,1","0,2","0,3","0,4","0,5","0,6","0,7","0,8","0,9","0,10","0,11","0,12","0,13","0,14","0,15"],
