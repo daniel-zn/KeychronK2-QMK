@@ -40,8 +40,6 @@ int rand(void) {
 static bool     usb_boot_requested;
 static uint16_t usb_boot_timer;
 
-void k2_rgb_changed(void);
-
 bool via_command_kb(uint8_t *data, uint8_t length) {
     // VIA saves the lighting after each change in its Lighting menu; save it
     // later instead, without a blink (k2_rgb_changed()).
@@ -260,8 +258,6 @@ bool dip_switch_update_kb(uint8_t index, bool active) {
     return dip_switch_update_user(index, active);
 }
 
-static bool process_rgb_key(uint16_t keycode, keyrecord_t *record);
-
 // macOS ignores a Caps Lock press shorter than about 80 ms (its Caps Lock
 // delay; QMK's TAP_HOLD_CAPS_DELAY is for the same reason), so a quick tap
 // sometimes did nothing. The release of a short tap is held back until the
@@ -296,70 +292,6 @@ static void caps_release_task(void) {
     if (caps_release_pending && timer_elapsed(caps_press_timer) >= K2_CAPS_MIN_HOLD) {
         caps_release_pending = false;
         unregister_code(KC_CAPS);
-    }
-}
-
-
-bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
-    if (!process_record_user(keycode, record)) {
-        return false;
-    }
-    if (!process_rgb_key(keycode, record)) {
-        return false;
-    }
-    if (!process_caps(keycode, record)) {
-        return false;
-    }
-
-    // K2_BT1-3 do what QMK's BT_PRF1-3 do; as keyboard keycodes they show
-    // in VIA's key picker by name.
-    uint8_t profile;
-    switch (keycode) {
-        case BT_PRF1 ... BT_PRF3:
-            profile = keycode - BT_PRF1;
-            break;
-        case K2_BT1 ... K2_BT3:
-            profile = keycode - K2_BT1;
-            break;
-        default:
-            profile = K2_BT_PROFILES;
-            break;
-    }
-
-    switch (keycode) {
-        case BT_PRF1 ... BT_PRF3:
-        case K2_BT1 ... K2_BT3:
-            if (!bt_mode) {
-                return false;
-            }
-            if (record->event.pressed) {
-                select_profile(profile);
-                pair_hold_active = true;
-                pair_hold_timer  = timer_read();
-            } else {
-                pair_hold_active = false;
-            }
-            return false;
-        case K2_BATT:
-            if (bt_mode && record->event.pressed) {
-                battery_asked     = true;
-                battery_ask_timer = timer_read32();
-                iton_bt_query_battery_level();
-            }
-            return false;
-    }
-    return true;
-}
-
-static void rgb_idle_task(void) {
-    bool idle = bt_mode && last_input_activity_elapsed() > K2_BT_RGB_TIMEOUT;
-
-    if (idle && !rgb_idle_off && rgb_matrix_is_enabled()) {
-        rgb_matrix_disable_noeeprom();
-        rgb_idle_off = true;
-    } else if (!idle && rgb_idle_off) {
-        rgb_matrix_enable_noeeprom();
-        rgb_idle_off = false;
     }
 }
 
@@ -424,19 +356,35 @@ static bool rgb_adjust(uint16_t keycode) {
     switch (keycode) {
         case RM_HUEU:
         case RM_HUED:
-            ((keycode == RM_HUEU) == up) ? rgb_matrix_increase_hue_noeeprom() : rgb_matrix_decrease_hue_noeeprom();
+            if ((keycode == RM_HUEU) == up) {
+                rgb_matrix_increase_hue_noeeprom();
+            } else {
+                rgb_matrix_decrease_hue_noeeprom();
+            }
             break;
         case RM_SATU:
         case RM_SATD:
-            ((keycode == RM_SATU) == up) ? rgb_matrix_increase_sat_noeeprom() : rgb_matrix_decrease_sat_noeeprom();
+            if ((keycode == RM_SATU) == up) {
+                rgb_matrix_increase_sat_noeeprom();
+            } else {
+                rgb_matrix_decrease_sat_noeeprom();
+            }
             break;
         case RM_VALU:
         case RM_VALD:
-            ((keycode == RM_VALU) == up) ? rgb_matrix_increase_val_noeeprom() : rgb_matrix_decrease_val_noeeprom();
+            if ((keycode == RM_VALU) == up) {
+                rgb_matrix_increase_val_noeeprom();
+            } else {
+                rgb_matrix_decrease_val_noeeprom();
+            }
             break;
         case RM_SPDU:
         case RM_SPDD:
-            ((keycode == RM_SPDU) == up) ? rgb_matrix_increase_speed_noeeprom() : rgb_matrix_decrease_speed_noeeprom();
+            if ((keycode == RM_SPDU) == up) {
+                rgb_matrix_increase_speed_noeeprom();
+            } else {
+                rgb_matrix_decrease_speed_noeeprom();
+            }
             break;
         default:
             return false;
@@ -510,6 +458,69 @@ static bool process_rgb_key(uint16_t keycode, keyrecord_t *record) {
     }
     k2_rgb_changed();
     return false;
+}
+
+bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
+    if (!process_record_user(keycode, record)) {
+        return false;
+    }
+    if (!process_rgb_key(keycode, record)) {
+        return false;
+    }
+    if (!process_caps(keycode, record)) {
+        return false;
+    }
+
+    // K2_BT1-3 do what QMK's BT_PRF1-3 do; as keyboard keycodes they show
+    // in VIA's key picker by name.
+    uint8_t profile;
+    switch (keycode) {
+        case BT_PRF1 ... BT_PRF3:
+            profile = keycode - BT_PRF1;
+            break;
+        case K2_BT1 ... K2_BT3:
+            profile = keycode - K2_BT1;
+            break;
+        default:
+            profile = K2_BT_PROFILES;
+            break;
+    }
+
+    switch (keycode) {
+        case BT_PRF1 ... BT_PRF3:
+        case K2_BT1 ... K2_BT3:
+            if (!bt_mode) {
+                return false;
+            }
+            if (record->event.pressed) {
+                select_profile(profile);
+                pair_hold_active = true;
+                pair_hold_timer  = timer_read();
+            } else {
+                pair_hold_active = false;
+            }
+            return false;
+        case K2_BATT:
+            if (bt_mode && record->event.pressed) {
+                battery_asked     = true;
+                battery_ask_timer = timer_read32();
+                iton_bt_query_battery_level();
+            }
+            return false;
+    }
+    return true;
+}
+
+static void rgb_idle_task(void) {
+    bool idle = bt_mode && last_input_activity_elapsed() > K2_BT_RGB_TIMEOUT;
+
+    if (idle && !rgb_idle_off && rgb_matrix_is_enabled()) {
+        rgb_matrix_disable_noeeprom();
+        rgb_idle_off = true;
+    } else if (!idle && rgb_idle_off) {
+        rgb_matrix_enable_noeeprom();
+        rgb_idle_off = false;
+    }
 }
 
 static k2_sleep_blocker_t sleep_blocker;

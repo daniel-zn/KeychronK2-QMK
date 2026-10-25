@@ -5,7 +5,11 @@ USB bootloader request against a stand-in for hidapi.
 
 The stock dir is stockFWs/Keychron/240B of github.com/SonixQMK/Mechanical-Keyboard-Database.
 """
-import sys, pathlib, importlib.util, tempfile
+import importlib.util
+import pathlib
+import sys
+import tempfile
+import types
 spec = importlib.util.spec_from_file_location("flash_k2", sys.argv[1])
 fk = importlib.util.module_from_spec(spec); spec.loader.exec_module(fk)
 root = pathlib.Path(sys.argv[2]); stock = pathlib.Path(sys.argv[3])
@@ -45,7 +49,6 @@ try:
 except SystemExit:
     expect("two keyboards refused", True)
 # request_bootloader, against a stand-in for hidapi
-import types
 class FakeDevice:
     def __init__(self, reply): self.reply, self.sent = reply, None
     def open_path(self, path): pass

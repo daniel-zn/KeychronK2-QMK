@@ -39,10 +39,10 @@ already run Keychron's own QMK: remap those in the Keychron Launcher.
 | Mac / Windows switch | Yes | Yes, also told to the Bluetooth module |
 | Battery | Charging light | Charging light (the charger drives it, unchanged), plus Fn+B shows the level on the number row and Esc blinks red when low |
 | Sleep on Bluetooth | Yes | Backlight off after 5 min, deep sleep after 10 min, any key wakes, link stays up |
-| Backlight | Keychron's effects | QMK's effects (about 40), set from VIA's Lighting tab. Changes show at once and are saved when the LEDs are dark (off, idle timeout, host asleep) or a minute after the last change: a save stalls the MCU for about 24 ms and blanks the LEDs, a blink on every step if saved at once. Unplugging within that minute loses the change |
+| Backlight | Keychron's effects | QMK's effects (about 40), set from VIA's Lighting tab; changes are saved a little later, see [Use it](#6-use-it) |
 | Caps Lock light | Yes | Yes, also over Bluetooth |
-| Caps Lock on a Mac | Every tap | Every tap: macOS ignores Caps Lock presses shorter than about 80 ms, so the firmware holds a quick tap for 100 ms (`K2_CAPS_MIN_HOLD`) |
-| Fn+Esc | — | Bootloader, for reflashing (the keyboard stops until replugged if pressed by accident). VIA images also enter it on request over USB, which `flash_k2.py` uses, so the key can be remapped in VIA with nothing lost |
+| Caps Lock on a Mac | Not measured | Every tap counts: macOS ignores Caps Lock presses shorter than about 80 ms, so the firmware holds a quick tap for 100 ms (`K2_CAPS_MIN_HOLD`) |
+| Bootloader | — | Fn+Esc (the keyboard stops until replugged if pressed by accident), and with a VIA image on request over USB, which `flash_k2.py` uses: Fn+Esc can be remapped |
 
 SonixQMK alone loses Bluetooth on the K2 (it has no Bluetooth driver set up
 for the K2), its Mac Fn+Esc does nothing (`Q_RESET` is a ChibiOS constant, not
@@ -66,25 +66,24 @@ What remains different from stock, all small:
 |---|---|
 | Bluetooth wiring checked | Stock K2 and K8 firmwares (SonixQMK database) disassembled: SPI0 interrupt handler instruction-for-instruction identical, same A0 request / A1 direction lines, same `0xA6` control commands, same side-switch decoding, same flash-mode command. The K8 port is tested on real hardware with a Mac |
 | Builds | ANSI and ISO, `default` and `default_via`; no warnings; `qmk lint` passes |
-| Fits | VIA images use flash up to 0xE424 of 0xF7C0 (settings area above; Arm's macOS GCC 13.2.1 build, the Linux one adds about 450 bytes), 208–224 bytes RAM free (the hardware-tested K8 VIA image has 224) |
-| Emulator tests | 61 checks pass, 0 fail, 1 known issue (the Caps Lock one above), see [Tests](#8-tests) |
+| Fits | VIA images use flash up to 0xE898 of 0xF7C0 (settings area above; Arm's macOS GCC 13.2.1 build), 192–208 bytes RAM free; the release script requires 128 |
+| Emulator tests | 61 checks pass, 0 fail, 1 known issue (the Caps Lock one above), see [Tests](#8-tests). Run on b2e5b43e34, before the lighting, Caps Lock and USB-bootloader changes in `v2.c`; not rerun since |
 | Flash script checks | Refuses K8 images, K2 v1 images, junk, layout mismatches, a stock keyboard that is not a K2 v2; asks for the bootloader over USB and falls back to Fn+Esc (24 checks in `flash/test_flash_k2.py`) |
-| Reproducible | A clean rebuild with the same compiler gives byte-identical images. The VIA images depend on the build date (VIA's settings check uses it), so a rebuild on another day differs. Arm's macOS build of GCC 13.2.1 (Homebrew `osx-cross/arm/arm-gcc-bin@13`) makes images about 450 bytes smaller than the Linux one, with the same free RAM |
+| Reproducible | A rebuild with the same compiler on the same day gives byte-identical images (VIA images hold a magic from the build date). Arm's macOS build of GCC 13.2.1 makes images about 450 bytes smaller than the Linux one, with the same free RAM |
 
-**On a real K2** (ANSI, stock firmware v1.07, Mac mini and MacBook, 2026-10-25):
+**On a real K2** (ANSI, stock firmware v1.07, Mac mini and MacBook, 2026-10-25). From the reflash with no key press on, the checks ran with a userspace keymap built on this repository's `v2.c` rather than the `default_via` image:
 
 | Check | Result |
 |---|---|
 | Board check: USB "Keychron" / "Keychron K2", 05ac:024f, bcdDevice 0x0107, RGB backlight | Pass |
 | First flash from stock v1.07 with the `hfd` ISP command, case closed | Pass: flashed and verified, the keyboard came back as 3434:fe02 |
 | Reflash: Fn+Esc enters the ROM bootloader (0c45:7040), `flash_k2.py` flashes it | Pass |
-| Saving settings without a flash of light: lighting changes in quick succession and Fn+Light off/on, after the LED driver goes dark during flash writes (before, a random row flashed at full brightness on each save) | Pass |
-| Hold Fn+F5 / Fn+F6 to keep dimming or brightening | Pass |
-| Caps Lock tapped quickly and repeatedly on a Mac registers every time (before: some quick taps did nothing) | Pass |
-| Lighting saved later, no blink per step: brightness steps and effect changes | Pass by eye; over USB (`flash/save_test.py`) a VIA save takes 2 ms instead of 24, a restart right after a change loses it, 65 s after keeps it, turning off saves at once. Saving when the host sleeps or the Bluetooth idle timeout turns the backlight off: not tried |
-| Reflash with no key press: `flash_k2.py` asks over USB, the firmware enters the ROM bootloader, flashes, comes back | Pass (twice, with a userspace keymap built on this firmware's `v2.c`); a firmware without the request answers "unhandled" and the script falls back to Fn+Esc, also checked on the keyboard |
 | Typing, wired | Pass (most keys checked by hand, on another computer) |
 | RGB effects, no flicker | Pass |
+| Reflash with no key press: `flash_k2.py` asks over USB, the firmware enters the ROM bootloader, flashes, comes back | Pass (many times, with a userspace keymap on this `v2.c`); firmware without the request answers "unhandled" and the script falls back to Fn+Esc, also checked |
+| Lighting changes in quick succession, Fn+Light off/on: no flash of light, no blink | Pass (before: a save on each change flashed a random LED row, then blinked the LEDs). Over USB (`flash/save_test.py`): a save returns in 2 ms instead of 24, a restart right after a change loses it, 65 s after keeps it, turning off saves at once. Saving when the host sleeps or the Bluetooth idle timeout darkens the backlight: not tried |
+| Hold Fn+F5 / Fn+F6 to keep dimming or brightening | Pass |
+| Caps Lock tapped quickly and repeatedly on a Mac | Pass: every tap registers (before: some did nothing) |
 | Fn row, Fn+arrows, Caps Lock light, wired | Mostly checked, nothing failed |
 | VIA over raw HID: protocol 0x000D, 4 layers, 16 macros, RGB values, all 384 keys match the image | Pass (by script, not in usevia.app) |
 | VIA remap: Right Ctrl set to A types "a" and survives unplugging | Pass |
@@ -176,6 +175,14 @@ again (it flashes the ROM bootloader directly).
 | Light (top right) | Next lighting effect; Fn+Light turns the lights on or off |
 | Fn+F5 / Fn+F6 | Backlight dimmer / brighter; hold to keep going (also Fn+arrows for hue and saturation) |
 
+Lighting changes (these keys, VIA's Lighting menu) show at once and are
+saved when the LEDs are dark anyway (backlight off, idle timeout, host
+asleep) or a minute after the last change. Saving writes the flash, which
+stalls the MCU for about 24 ms with the LEDs dark: saved at once, every
+brightness step would blink. Unplugging within that minute loses the change.
+A keymap that changes the lighting itself (`rgb_matrix_*_noeeprom()`) calls
+`k2_rgb_changed()` from `v2.h` to get the same.
+
 Moving the side switch restarts the keyboard. To pair: switch to BT, hold
 Fn+1 until the 1 key blinks blue, connect to "Keychron K2" from the host.
 White blinking is reconnecting; green or red after an action is connected or
@@ -258,13 +265,19 @@ the image's default (Python with `hidapi`, the ARM binutils on the PATH):
 
 It also reads and sets single keys (`get`, `set`), the lighting (`rgb`,
 `rgbset`), dumps the layers (`dump`) and loads the image's defaults (`reset`).
+`flash/save_test.py` checks when the lighting is saved (about two minutes; it
+restarts the keyboard through the bootloader without flashing and sets the
+lighting back afterwards):
+
+    uv run --with hidapi python keyboards/keychron/k2/rgb/v2/flash/save_test.py \
+        keyboards/keychron/k8/flash/.flasher/sonixflasher
 
 ## 9. Files
 
 | Path | Contents |
 |---|---|
 | `drivers/led/sn32f2xx.c` (from the repository root, shared by all SN32 keyboards) | LED driver: dark while the flash is written |
-| `v2.c` | Bluetooth control: profiles, pairing, battery, indicators, backlight timeout; the bootloader on request over USB (VIA images: raw HID command `0x0B` followed by `BOOT`) |
+| `v2.c`, `v2.h` | Bluetooth control: profiles, pairing, battery, indicators, backlight timeout; lighting keys that save later and repeat when held; Caps Lock minimum hold; the bootloader on request over USB (VIA images: raw HID command `0x0B` followed by `BOOT`). `v2.h`: `k2_rgb_changed()` for keymaps |
 | `sleep.c` | Deep sleep on Bluetooth |
 | `config.h`, `rules.mk`, `info.json`, `halconf.h`, `mcuconf.h` | Board settings: Bluetooth module, SPI0, keycodes |
 | `ansi/`, `iso/` | Layouts and keymaps (`default`, `default_via`) |

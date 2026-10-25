@@ -6,9 +6,10 @@
     via_test.py set <layer> <row> <col> <keycode hex>
     via_test.py reset               load the firmware's default keymap
     via_test.py rgb                 read the RGB matrix values
-    via_test.py rgbset <brightness> <effect>
+    via_test.py rgbset <brightness> <effect>   (VIA's Lighting menu: v2.c saves it later)
     via_test.py dump                print the four layers
 """
+import pathlib
 import struct
 import subprocess
 import sys
@@ -52,14 +53,16 @@ def read_keymap(h):
 def elf_keymap(elf):
     """The compiled default keymap (symbol `keymaps`, little-endian uint16)."""
     nm = subprocess.run(["arm-none-eabi-nm", "-S", elf], capture_output=True, text=True, check=True).stdout
-    addr, size = next((int(a, 16), int(s, 16)) for a, s, _, n in (l.split() for l in nm.splitlines() if len(l.split()) == 4) if n == "keymaps")
+    symbols = (line.split() for line in nm.splitlines())
+    addr, size = next((int(f[0], 16), int(f[1], 16)) for f in symbols if len(f) == 4 and f[3] == "keymaps")
     hdrs = subprocess.run(["arm-none-eabi-objdump", "-h", elf], capture_output=True, text=True, check=True).stdout
     for line in hdrs.splitlines():
         f = line.split()
         if len(f) >= 6 and f[0].isdigit():
             vma, off, sz = int(f[3], 16), int(f[5], 16), int(f[2], 16)
             if vma <= addr < vma + sz:
-                data = open(elf, "rb").read()[off + addr - vma: off + addr - vma + size]
+                start = off + addr - vma
+                data = pathlib.Path(elf).read_bytes()[start:start + size]
                 return struct.unpack(f"<{size // 2}H", data)
     sys.exit("keymaps not found in the elf")
 
@@ -112,8 +115,9 @@ def main():
     elif a[0] == "rgb":
         print(rgb(h))
     elif a[0] == "rgbset":
-        cmd(h, 0x07, 3, 1, int(a[1]))
+        # The effect first: with the backlight off, QMK ignores a brightness.
         cmd(h, 0x07, 3, 2, int(a[2]))
+        cmd(h, 0x07, 3, 1, int(a[1]))
         cmd(h, 0x09, 3)
         print(rgb(h))
     elif a[0] == "dump":
