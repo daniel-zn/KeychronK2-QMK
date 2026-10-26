@@ -57,6 +57,11 @@ What remains different from stock, all small:
   can leave the Caps Lock light wrong until the next change (seen in the
   emulator; the K8 port saw it once on hardware)
 * Battery life in sleep has not been measured against stock
+* On Bluetooth, as Fn+B's battery bar ends, the keys to its right (`-`, `=`,
+  Backspace, Page Up) can flash green and fade back, also with USB power. The
+  colours the firmware sends are clean (read from the LED driver's memory in
+  a test on the cable), so it lies in the real Bluetooth path, perhaps the
+  module's SPI interrupt holding up the LED row scan; not investigated further
 * macOS shows the "identify your keyboard" assistant once, because the USB ID
   changes from Apple's to Keychron's
 
