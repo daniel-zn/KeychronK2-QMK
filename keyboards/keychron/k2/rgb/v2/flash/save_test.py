@@ -4,9 +4,10 @@
     uv run --with hidapi python save_test.py <sonixflasher>
 
 Over VIA: a save returns at once, a restart right after a change loses it, a
-restart 65 s later keeps it, turning the backlight off saves at once. It
-restarts the keyboard through the ROM bootloader and back (nothing is
-flashed), takes about two minutes and sets the lighting back at the end.
+restart 8 s later keeps it (v2.c saves 5 s after the last change), turning
+the backlight off saves at once. It restarts the keyboard through the ROM
+bootloader and back (nothing is flashed), takes about a minute and sets the
+lighting back at the end.
 """
 import subprocess
 import sys
@@ -89,11 +90,11 @@ def main():
     check("restart right after a change: not saved yet", got["brightness"] == before["brightness"], got)
 
     set_lighting(h, test, before["effect"] or 1)
-    print("waiting 65 s for the delayed save ...")
-    time.sleep(65)
+    print("waiting 8 s for the delayed save ...")
+    time.sleep(8)
     h = restart(h, flasher)
     got = lighting(h)
-    check("restart 65 s after a change: saved", got["brightness"] == test, got)
+    check("restart 8 s after a change: saved", got["brightness"] == test, got)
 
     # Brightness while still on, then off.
     cmd(h, 0x07, RGB_MATRIX, BRIGHTNESS, before["brightness"])
@@ -104,7 +105,7 @@ def main():
     got = lighting(h)
     check("backlight turned off: saved at once", got["effect"] == 0 and got["brightness"] == before["brightness"], got)
 
-    # Back as it was; turning off saved it, turning on saves within a minute.
+    # Back as it was; turning off saved it, turning on saves 5 s later.
     set_lighting(h, before["brightness"], before["effect"])
     print("RESULT", "pass" if all(results) else "FAIL")
     sys.exit(0 if all(results) else 1)

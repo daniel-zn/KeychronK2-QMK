@@ -81,7 +81,7 @@ What remains different from stock, all small:
 | Typing, wired | Pass (most keys checked by hand, on another computer) |
 | RGB effects, no flicker | Pass |
 | Reflash with no key press: `flash_k2.py` asks over USB, the firmware enters the ROM bootloader, flashes, comes back | Pass (many times, with a userspace keymap on this `v2.c`); firmware without the request answers "unhandled" and the script falls back to Fn+Esc, also checked |
-| Lighting changes in quick succession, Fn+Light off/on: no flash of light, no blink | Pass (before: a save on each change flashed a random LED row, then blinked the LEDs). Over USB (`flash/save_test.py`): a save returns in 2 ms instead of 24, a restart right after a change loses it, 65 s after keeps it, turning off saves at once. Saving when the host sleeps or the Bluetooth idle timeout darkens the backlight: not tried |
+| Lighting changes in quick succession, Fn+Light off/on: no flash of light, no blink | Pass (before: a save on each change flashed a random LED row, then blinked the LEDs). Over USB (`flash/save_test.py`): a save returns in 2 ms instead of 24, a restart right after a change loses it, 8 s after keeps it (the delay is 5 s; it was a minute), turning off saves at once. Saving when the host sleeps or the Bluetooth idle timeout darkens the backlight: not tried |
 | Hold Fn+F5 / Fn+F6 to keep dimming or brightening | Pass |
 | Caps Lock tapped quickly and repeatedly on a Mac | Pass: every tap registers (before: some did nothing) |
 | Fn row, Fn+arrows, Caps Lock light, wired | Mostly checked, nothing failed |
@@ -92,6 +92,7 @@ What remains different from stock, all small:
 | VIA in usevia.app (Design tab, Custom keys, Lighting menu) | Not tried |
 | Fn+B battery level on Bluetooth | Pass (backlight on). Backlight off: did not show before indicators were drawn with the backlight off; since then checked over USB with a lock-key indicator (the LED memory pulses), the battery itself not yet |
 | When the battery bar ends, the number row repaints at once | Changed after a report that the row looked disturbed (before: its keys went dark for 50 ms); not yet seen on the board |
+| Lighting kept when the side switch moves right after a change (saved on the switch, and 5 s after a change) | Not tried yet (before: a change less than a minute old was lost, so Cable and Bluetooth seemed to keep their own lighting) |
 | Fn+1/2/3 profile switching, Cable → BT → Cable | Not tried |
 | Backlight off after 5 min, deep sleep after 10 min, wake keystroke | Not tried |
 | Caps Lock light over Bluetooth | Not tried |
@@ -179,11 +180,13 @@ again (it flashes the ROM bootloader directly).
 
 Lighting changes (these keys, VIA's Lighting menu) show at once and are
 saved when the LEDs are dark anyway (backlight off, idle timeout, host
-asleep) or a minute after the last change. Saving writes the flash, which
-stalls the MCU for about 24 ms with the LEDs dark: saved at once, every
-brightness step would blink. Unplugging within that minute loses the change.
-A keymap that changes the lighting itself (`rgb_matrix_*_noeeprom()`) calls
-`k2_rgb_changed()` from `v2.h` to get the same.
+asleep), when the connection switch moves, or 5 s after the last change.
+Saving writes the flash, which stalls the MCU for about 24 ms with the LEDs
+dark: saved at once, every brightness step would blink. The switch passes
+through Off, which restarts the keyboard unless USB powers it; a change
+saved only later was lost there, so the lighting seemed to differ between
+Cable and Bluetooth. A keymap that changes the lighting itself
+(`rgb_matrix_*_noeeprom()`) calls `k2_rgb_changed()` from `v2.h` to get the same.
 
 Moving the side switch restarts the keyboard. To pair: switch to BT, hold
 Fn+1 until the 1 key blinks blue, connect to "Keychron K2" from the host.
@@ -267,7 +270,7 @@ the image's default (Python with `hidapi`, the ARM binutils on the PATH):
 
 It also reads and sets single keys (`get`, `set`), the lighting (`rgb`,
 `rgbset`), dumps the layers (`dump`) and loads the image's defaults (`reset`).
-`flash/save_test.py` checks when the lighting is saved (about two minutes; it
+`flash/save_test.py` checks when the lighting is saved (about a minute; it
 restarts the keyboard through the bootloader without flashing and sets the
 lighting back afterwards):
 

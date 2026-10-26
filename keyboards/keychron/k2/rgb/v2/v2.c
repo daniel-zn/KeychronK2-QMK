@@ -241,23 +241,6 @@ void keyboard_post_init_kb(void) {
     keyboard_post_init_user();
 }
 
-bool dip_switch_update_kb(uint8_t index, bool active) {
-    switch (index) {
-        case DIP_OS:
-            mac_mode          = active;
-            module_needs_mode = true;
-            break;
-        case DIP_CONNECTION:
-            bt_mode = !active;
-            connection_set_host_noeeprom(bt_mode ? CONNECTION_HOST_BLUETOOTH : CONNECTION_HOST_USB);
-            module_needs_mode = true;
-            pair_hold_active  = false;
-            set_bt_state(BT_IDLE);
-            break;
-    }
-    return dip_switch_update_user(index, active);
-}
-
 // macOS ignores a Caps Lock press shorter than about 80 ms (its Caps Lock
 // delay; QMK's TAP_HOLD_CAPS_DELAY is for the same reason), so a quick tap
 // sometimes did nothing. The release of a short tap is held back until the
@@ -300,10 +283,11 @@ static void caps_release_task(void) {
 // every brightness step or effect change. So the lighting keys, VIA's
 // Lighting menu and a keymap's own light keys (calling k2_rgb_changed())
 // change the lighting in RAM only, and it is saved once the LEDs are dark
-// anyway (backlight off, idle timeout, host asleep) or K2_RGB_SAVE_DELAY
-// after the last change, so it survives unplugging.
+// anyway (backlight off, idle timeout, host asleep), when the connection
+// switch moves, or K2_RGB_SAVE_DELAY after the last change: one blink, and
+// a change survives unplugging or the switch's Off position.
 #    ifndef K2_RGB_SAVE_DELAY
-#        define K2_RGB_SAVE_DELAY 60000
+#        define K2_RGB_SAVE_DELAY 5000
 #    endif
 
 static bool     rgb_save_pending;
@@ -458,6 +442,29 @@ static bool process_rgb_key(uint16_t keycode, keyrecord_t *record) {
     }
     k2_rgb_changed();
     return false;
+}
+
+bool dip_switch_update_kb(uint8_t index, bool active) {
+    switch (index) {
+        case DIP_OS:
+            mac_mode          = active;
+            module_needs_mode = true;
+            break;
+        case DIP_CONNECTION:
+            // The switch passes through Off, which restarts the keyboard
+            // when nothing else powers it: save the lighting now, while
+            // there is still power.
+            if (rgb_save_pending) {
+                rgb_save();
+            }
+            bt_mode = !active;
+            connection_set_host_noeeprom(bt_mode ? CONNECTION_HOST_BLUETOOTH : CONNECTION_HOST_USB);
+            module_needs_mode = true;
+            pair_hold_active  = false;
+            set_bt_state(BT_IDLE);
+            break;
+    }
+    return dip_switch_update_user(index, active);
 }
 
 bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
