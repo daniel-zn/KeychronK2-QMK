@@ -602,23 +602,28 @@ static uint8_t indicators_lit(void) {
 
 // Some effects (raindrops, pixel rain) repaint only a few keys at a time, so
 // a key an indicator lit kept its colour long after the indicator ended. When
-// one ends, its keys go dark briefly and every effect paints them afresh.
-#    define K2_INDICATOR_CLEAR_TIME 50
+// one ends, the effect starts again, which repaints every key at once.
+static uint8_t lit_before;
 
-static uint8_t  lit_before;
-static uint8_t  clearing;
-static uint32_t clearing_timer;
-
-static void indicator_clear_task(void) {
+static void indicator_end_task(void) {
     uint8_t lit   = indicators_lit();
     uint8_t ended = lit_before & ~lit;
     lit_before    = lit;
-    if (ended) {
-        clearing |= ended;
-        clearing_timer = timer_read32();
-    } else if (clearing && timer_elapsed32(clearing_timer) >= K2_INDICATOR_CLEAR_TIME) {
-        clearing = 0;
+    if (ended && rgb_matrix_is_enabled()) {
+        rgb_matrix_mode_noeeprom(rgb_matrix_get_mode());
     }
+}
+
+// With the backlight off QMK draws no indicators and sends the LEDs one black
+// frame only, so the indicators (this file's and a keymap's
+// rgb_matrix_indicators_advanced_user()) are drawn over black and sent here.
+static void indicators_while_off_task(void) {
+    if (rgb_matrix_is_enabled()) {
+        return;
+    }
+    rgb_matrix_set_color_all(RGB_OFF);
+    rgb_matrix_indicators_advanced_kb(0, RGB_MATRIX_LED_COUNT);
+    rgb_matrix_update_pwm_buffers(); // copies only what changed
 }
 
 void housekeeping_task_kb(void) {
@@ -646,7 +651,8 @@ void housekeeping_task_kb(void) {
     rgb_save_task();
     rgb_idle_task();
     sleep_task();
-    indicator_clear_task();
+    indicator_end_task();
+    indicators_while_off_task();
 #    ifdef ITON_BT_DEBUG
     debug_task();
 #    endif
@@ -671,15 +677,6 @@ static uint8_t number_key_led(uint8_t n) {
 bool rgb_matrix_indicators_advanced_kb(uint8_t led_min, uint8_t led_max) {
     if (!rgb_matrix_indicators_advanced_user(led_min, led_max)) {
         return false;
-    }
-
-    if (clearing & LIT_NUMBER_ROW) {
-        for (uint8_t i = 0; i < 10; i++) {
-            set_color_in_range(number_key_led(i), led_min, led_max, RGB_OFF);
-        }
-    }
-    if (clearing & LIT_ESC) {
-        set_color_in_range(g_led_config.matrix_co[0][0], led_min, led_max, RGB_OFF);
     }
 
     if (!bt_mode) {

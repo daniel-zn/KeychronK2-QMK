@@ -37,7 +37,7 @@ already run Keychron's own QMK: remap those in the Keychron Launcher.
 | Remapping | None | Every key on 4 layers in VIA (Mac and Windows base + Fn layers), macros, live, no rebuild |
 | Bluetooth | 3 profiles | 3 profiles: Fn+1/2/3, hold 3 s to pair |
 | Mac / Windows switch | Yes | Yes, also told to the Bluetooth module |
-| Battery | Charging light | Charging light (the charger drives it, unchanged), plus Fn+B shows the level on the number row and Esc blinks red when low |
+| Battery | Charging light | Charging light (the charger drives it, unchanged), plus on Bluetooth Fn+B shows the level on the number row and Esc blinks red when low, with the backlight on or off |
 | Sleep on Bluetooth | Yes | Backlight off after 5 min, deep sleep after 10 min, any key wakes, link stays up |
 | Backlight | Keychron's effects | QMK's effects (about 40), set from VIA's Lighting tab; changes are saved a little later, see [Use it](#6-use-it) |
 | Caps Lock light | Yes | Yes, also over Bluetooth |
@@ -66,7 +66,7 @@ What remains different from stock, all small:
 |---|---|
 | Bluetooth wiring checked | Stock K2 and K8 firmwares (SonixQMK database) disassembled: SPI0 interrupt handler instruction-for-instruction identical, same A0 request / A1 direction lines, same `0xA6` control commands, same side-switch decoding, same flash-mode command. The K8 port is tested on real hardware with a Mac |
 | Builds | ANSI and ISO, `default` and `default_via`; no warnings; `qmk lint` passes |
-| Fits | VIA images use flash up to 0xE898 of 0xF7C0 (settings area above; Arm's macOS GCC 13.2.1 build), 192–208 bytes RAM free; the release script requires 128 |
+| Fits | VIA images use flash up to 0xE864 of 0xF7C0 (settings area above; Arm's macOS GCC 13.2.1 build), 200–216 bytes RAM free; the release script requires 128 |
 | Emulator tests | 61 checks pass, 0 fail, 1 known issue (the Caps Lock one above), see [Tests](#8-tests). Run on b2e5b43e34, before the lighting, Caps Lock and USB-bootloader changes in `v2.c`; not rerun since |
 | Flash script checks | Refuses K8 images, K2 v1 images, junk, layout mismatches, a stock keyboard that is not a K2 v2; asks for the bootloader over USB and falls back to Fn+Esc (24 checks in `flash/test_flash_k2.py`) |
 | Reproducible | A rebuild with the same compiler on the same day gives byte-identical images (VIA images hold a magic from the build date). Arm's macOS build of GCC 13.2.1 makes images about 450 bytes smaller than the Linux one, with the same free RAM |
@@ -90,7 +90,9 @@ What remains different from stock, all small:
 | Bluetooth: hosts paired under stock still connect and type | Pass |
 | Bluetooth: new pairing with a MacBook, typing | Pass |
 | VIA in usevia.app (Design tab, Custom keys, Lighting menu) | Not tried |
-| Fn+B battery level, Fn+1/2/3 profile switching, Cable → BT → Cable | Not tried |
+| Fn+B battery level on Bluetooth | Pass (backlight on). Backlight off: did not show before indicators were drawn with the backlight off; since then checked over USB with a lock-key indicator (the LED memory pulses), the battery itself not yet |
+| When the battery bar ends, the number row repaints at once | Changed after a report that the row looked disturbed (before: its keys went dark for 50 ms); not yet seen on the board |
+| Fn+1/2/3 profile switching, Cable → BT → Cable | Not tried |
 | Backlight off after 5 min, deep sleep after 10 min, wake keystroke | Not tried |
 | Caps Lock light over Bluetooth | Not tried |
 | Back to stock | Not tried (and only v1.04 exists to go back to; see [Back to stock](#7-back-to-stock)) |
@@ -170,7 +172,7 @@ again (it flashes the ROM bootloader directly).
 | Side switch Mac / Windows | Mac or Windows layers |
 | Fn+1 / Fn+2 / Fn+3 | Switch to Bluetooth profile 1 / 2 / 3 |
 | Hold Fn+1 / 2 / 3 for 3 s | Put that profile into pairing mode |
-| Fn+B | Battery level on the number row for 3 s (green 10 keys, yellow 6, red 3) |
+| Fn+B | On Bluetooth: battery level on the number row for 3 s (green 10 keys, yellow 6, red 3); the level comes from the Bluetooth module, so on the cable Fn+B does nothing |
 | Fn+Esc | Bootloader (Mac and Windows layers) |
 | Light (top right) | Next lighting effect; Fn+Light turns the lights on or off |
 | Fn+F5 / Fn+F6 | Backlight dimmer / brighter; hold to keep going (also Fn+arrows for hue and saturation) |
@@ -277,7 +279,7 @@ lighting back afterwards):
 | Path | Contents |
 |---|---|
 | `drivers/led/sn32f2xx.c` (from the repository root, shared by all SN32 keyboards) | LED driver: dark while the flash is written |
-| `v2.c`, `v2.h` | Bluetooth control: profiles, pairing, battery, indicators, backlight timeout; lighting keys that save later and repeat when held; Caps Lock minimum hold; the bootloader on request over USB (VIA images: raw HID command `0x0B` followed by `BOOT`). `v2.h`: `k2_rgb_changed()` for keymaps |
+| `v2.c`, `v2.h` | Bluetooth control: profiles, pairing, battery, indicators (also with the backlight off), backlight timeout; lighting keys that save later and repeat when held; Caps Lock minimum hold; the bootloader on request over USB (VIA images: raw HID command `0x0B` followed by `BOOT`). `v2.h`: `k2_rgb_changed()` for keymaps |
 | `sleep.c` | Deep sleep on Bluetooth |
 | `config.h`, `rules.mk`, `info.json`, `halconf.h`, `mcuconf.h` | Board settings: Bluetooth module, SPI0, keycodes |
 | `ansi/`, `iso/` | Layouts and keymaps (`default`, `default_via`) |
