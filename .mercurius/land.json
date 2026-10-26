@@ -1,0 +1,15 @@
+{
+  "checks": [
+    {
+      "name": "k2-images",
+      "run": "PATH=\"$(brew --prefix arm-gcc-bin@13)/bin:$PATH\" keyboards/keychron/k2/rgb/v2/release/build_all.sh .build/land-dist",
+      "inputs": [
+        "**",
+        "!**/*.md",
+        "!docs/**"
+      ],
+      "line": "build",
+      "timeout": 20
+    }
+  ]
+}
