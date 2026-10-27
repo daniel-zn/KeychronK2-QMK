@@ -1,8 +1,11 @@
 {
+  "keep": [
+    ".build"
+  ],
   "checks": [
     {
       "name": "k2-images",
-      "run": "PATH=\"$(brew --prefix arm-gcc-bin@13)/bin:$PATH\" keyboards/keychron/k2/rgb/v2/release/build_all.sh .build/land-dist",
+      "run": "PATH=\"$(brew --prefix arm-gcc-bin@13)/bin:$PATH\" MAKEFLAGS=-j$(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null || echo 4) keyboards/keychron/k2/rgb/v2/release/build_all.sh .build/land-dist",
       "inputs": [
         "**",
         "!**/*.md",
